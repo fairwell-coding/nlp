@@ -22,3 +22,6 @@
 
 ### Issues
 - WMT'14, WMT'19 too big for GTX1070. Discuss ...
+
+### Note
+- Do NOT push weights, dataset here!
