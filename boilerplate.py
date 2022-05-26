@@ -1,4 +1,5 @@
 import os, sys
+os.environ["WANDB_DISABLED"] = "true"
 import numpy as np
 import random
 import pandas as pd
@@ -9,6 +10,10 @@ import transformers
 from datasets import load_dataset, load_metric, ClassLabel
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, DataCollatorForSeq2Seq, Seq2SeqTrainingArguments, Seq2SeqTrainer
 from transformers import pipeline, set_seed
+from torchsummary import summary
+
+from  huggingface_hub  import  notebook_login
+notebook_login()
 
 
 class NMT(object):
@@ -29,12 +34,13 @@ class NMT(object):
         self.save_total_limit = opt.save_total_limit
         self.num_train_epochs = opt.num_train_epochs
         self.predict_with_generate = True
+        self.fp16 = True
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 
         self.model_checkpoint = opt.model_checkpoint
         self.model_name = self.model_checkpoint.split("/")[-1]
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_checkpoint)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_checkpoint, model_max_length=42)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(self.model_checkpoint).to(self.device)
 
         self.dataset = None
@@ -99,22 +105,31 @@ class NMT(object):
             labels = self.tokenizer(targets, max_length=self.max_target_length, truncation=True)
         model_inputs["labels"] = labels["input_ids"]
         return model_inputs
+    
+    def count_parameters(self):
+        return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
     def finetune(self):
 
         tokenized_datasets = self.dataset.map(self.preprocess_function, batched=True)
-        self.model.train()
+
+        print('Model parameters: ', self.count_parameters())
         
         train_args = Seq2SeqTrainingArguments(
             f"{self.model_name}-finetuned-{self.source_lang}-to-{self.target_lang}",
+            # evaluation_strategy = "steps",
+            # eval_steps=1000,
             evaluation_strategy = "epoch",
             learning_rate=self.lr,
             per_device_train_batch_size=self.batch_size,
             per_device_eval_batch_size=self.batch_size,
+            gradient_accumulation_steps=4,
             weight_decay=self.weight_decay,
             save_total_limit=self.save_total_limit,
             num_train_epochs=self.num_train_epochs,
-            predict_with_generate=self.predict_with_generate    
+            predict_with_generate=self.predict_with_generate,
+            fp16=self.fp16,
+            push_to_hub=True    
         )
 
         data_collator = DataCollatorForSeq2Seq(self.tokenizer, model=self.model)
@@ -129,7 +144,31 @@ class NMT(object):
                                     compute_metrics=self.compute_metrics
                                 )
         
+        self.model.eval()
+        result = trainer.evaluate(max_length=self.max_target_length)
+        print("Before training, val: ", result)
+        torch.cuda.empty_cache()
+        trainer.eval_dataset = tokenized_datasets["test"]
+        result = trainer.evaluate(max_length=self.max_target_length)
+        print("Before training, test: ", result)
+        torch.cuda.empty_cache()
+
+        self.model.train()
+        trainer.eval_dataset = tokenized_datasets["validation"]
         trainer.train()
+        torch.cuda.empty_cache()
+
+        self.model.eval()
+        result = trainer.evaluate(max_length=self.max_target_length)
+        print("After training, val", result)
+        torch.cuda.empty_cache()
+
+        trainer.eval_dataset = tokenized_datasets["test"]
+        result = trainer.evaluate(max_length=self.max_target_length)
+        print("After training, test", result)
+        torch.cuda.empty_cache()
+
+        trainer.push_to_hub(tags= "translation" , commit_message= "Training complete" )
 
         return None
 
@@ -143,16 +182,16 @@ def main(opt):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--prefix', type=str, default="", help='set prefix')
-    parser.add_argument('--source_lang', type=str, default="en", help='set source language')
-    parser.add_argument('--target_lang', type=str, default="hi_en", help='set target language')
-    parser.add_argument('--dataset_name', type=str, default="cmu_hinglish_dog", help='set dataset name')
+    parser.add_argument('--prefix', type=str, default="translate Hinglish to English: ", help='set prefix')
+    parser.add_argument('--source_lang', type=str, default="hi_en", help='set source language for eg. en')
+    parser.add_argument('--target_lang', type=str, default="en", help='set target language for eg. hi_en')
+    parser.add_argument('--dataset_name', type=str, default="cmu_hinglish_dog", help='set dataset name for eg. cmu_hinglish_dog')
     parser.add_argument('--metric_name', type=str, default="sacrebleu", help='set metric')
-    parser.add_argument('--model_checkpoint', type=str, default="rossanez/t5-small-finetuned-de-en-wd-01", help='set model checkpoint')
-    parser.add_argument('--num_train_epochs', type=int, default=10, help="set num epochs")
+    parser.add_argument('--model_checkpoint', type=str, default="t5-small", help='set model checkpoint, eg. rossanez/t5-small-finetuned-de-en-wd-01 or google/mt5-small')
+    parser.add_argument('--num_train_epochs', type=int, default=100, help="set num epochs")
     parser.add_argument('--save_total_limit', type=int, default=3, help="set save total limit")
     parser.add_argument('--lr', type=float, default=2e-5, help="set learning rate")
-    parser.add_argument('--weight_decay', type=float, default=0.01, help="set weight decay")
+    parser.add_argument('--weight_decay', type=float, default=1e-5, help="set weight decay")
     parser.add_argument('--batch_size', type=int, default=16, help="set batch size")
     parser.add_argument('--num_samples', type=int, default=5, help="set number of samples of dataset to display")
     parser.add_argument('--max_input_length', type=int, default=128, help="set max input length")
