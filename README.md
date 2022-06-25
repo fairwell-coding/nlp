@@ -7,6 +7,10 @@ June, 2022
 
 We train NMT models based on t5-small for English->Hinglish and Hinglish->English
 
+All models trained on AMD Ryzen 7 3800XT, GTX 1070 and available on [HuggingFace](https://huggingface.co/sayanmandal)
+
+For LinCE benchmark on English->Hinglish, check this [leaderboard](https://ritual.uh.edu/lince/leaderboard)
+
 ## Guide
 ```
 - sudo apt-get install python3-pip
@@ -74,8 +78,6 @@ python pipeline.py --train True --push_to_hub True --prefix "translate English t
 ```
 
 Change paths and hyperparameters as per necessity. Have a look at pipline.py line 266-294 
-
-All models trained on AMD Ryzen 7 3800XT, GTX 1070 and available [here](https://huggingface.co/sayanmandal)
 
 ## Model Testing
 
