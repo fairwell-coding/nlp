@@ -19,9 +19,9 @@ For LinCE benchmark on English->Hinglish, check this [leaderboard](https://ritua
 - git clone https://github.com/fairwell-coding/nlp.git
 - cd nlp
 - pip install -r requirements.txt
-- python boilerplate.py
+- python pipeline.py
 ```
-- Have a look at the argument list in boilerplate.py
+- Have a look at the argument list in pipeline.py
 
 ## Student Model
 We create a student model from t5-small but we do not use distillation afterwards. Only fine-tuning.
