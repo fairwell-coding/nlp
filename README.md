@@ -171,6 +171,18 @@ Target: "What is the movie about?"
 Predicted: "What is the movie about?"
 ```
 
+## Distillation 
+To execute the distillation execute the following steps:
+1. download the transformers repository from `https://github.com/huggingface/transformers` and paste it in the root folder.
+2. install the requirements.txt in the root folder.
+3. install the requirements.txt in `./transformers-main/examples/research_projects/seq2seq-distillation`.
+4. execute the `distillation_script.sh`, change parameters if needed (e.g. number ob decoder / encoder).
+
+**Results:**
+
+Distillation with 2 encoders and 1 decoders: 1.8104. \
+Distillation with 6 encoders and 3 decoders: 2.0647.
+
 ## Progress
 - [x] Dataset Creation
 - [x] Student Model Creation
